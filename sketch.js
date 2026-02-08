@@ -3,44 +3,46 @@ var PRESETS = {
   drift: {
     label: 'Drift',
     numPlanes: 20,
-    minSize: 180,
-    maxSize: 300,
+    minW: 200, maxW: 400,
+    minH: 120, maxH: 280,
     gridRes: 12,
     steps: 35,
     baseFreq: 0.005,
     freqMult: 0.1,
     ampMult: 1.0,
-    animDuration: 8,
+    animDuration: 12,
   },
   torrent: {
     label: 'Torrent',
     numPlanes: 55,
-    minSize: 80,
-    maxSize: 180,
+    minW: 60, maxW: 220,
+    minH: 80, maxH: 200,
     gridRes: 12,
     steps: 60,
     baseFreq: 0.015,
     freqMult: 0.15,
     ampMult: 1.4,
-    animDuration: 6,
+    animDuration: 10,
   },
   filaments: {
     label: 'Filaments',
     numPlanes: 75,
-    minSize: 40,
-    maxSize: 100,
+    minW: 20, maxW: 60,
+    minH: 80, maxH: 200,
     gridRes: 8,
     steps: 80,
     baseFreq: 0.025,
     freqMult: 0.2,
     ampMult: 1.8,
-    animDuration: 5,
+    animDuration: 8,
   },
 };
 
 var PRESET_KEYS = Object.keys(PRESETS);
 var HOLD_MS = 2500;
-var CREATOR_MAX_STEPS = 60;
+var FADE_MS = 600;
+var CREATOR_MAX_STEPS = 50;
+var CREATOR_NUM_PLANES = 40;
 
 // ── State ────────────────────────────────────────────────────────
 let planes = [];
@@ -52,32 +54,27 @@ let activePreset = 'drift';
 // Mode: 'showcase' or 'creator'
 let mode = 'showcase';
 
-// Showcase state machine
+// Showcase state machine: 'warping' → 'hold_warped' → 'fading' → (new preset)
 let phase = 'warping';
 let phaseStartTime = 0;
-let showcaseTimer = null;
 
 // Creator state
 let interactiveSeed = null;
 let interactiveNoiseSeed = null;
-let regenTimer = null;
 
 // Shuffle animation
 let shuffleAnimating = false;
 let shuffleStartTime = 0;
-let shuffleOldPlanes = [];
+let shuffleOldPositions = [];
 var SHUFFLE_MS = 800;
 
 // DOM refs
-let densitySlider, intensitySlider;
+let scaleSlider, intensitySlider;
+let fadeOverlay;
 
 // ── Easing ───────────────────────────────────────────────────────
 function easeOutCubic(t) {
   return 1 - Math.pow(1 - t, 3);
-}
-
-function easeInCubic(t) {
-  return Math.pow(t, 3);
 }
 
 // ── p5 lifecycle ─────────────────────────────────────────────────
@@ -87,8 +84,9 @@ function setup() {
   colorMode(HSB, 360, 100, 100, 255);
   noStroke();
 
-  densitySlider = document.getElementById('density-slider');
+  scaleSlider = document.getElementById('scale-slider');
   intensitySlider = document.getElementById('intensity-slider');
+  fadeOverlay = document.getElementById('fade-overlay');
 
   document.getElementById('make-own-btn').addEventListener('click', function () {
     switchMode('creator');
@@ -97,18 +95,18 @@ function setup() {
     switchMode('showcase');
   });
   document.getElementById('shuffle-btn').addEventListener('click', function () {
-    shuffleOldPlanes = planes.map(function (p) {
-      return { position: p.position.copy(), maxStep: p.maxSteps };
+    shuffleOldPositions = planes.map(function (p) {
+      return p.position.copy();
     });
     interactiveSeed = Math.floor(Math.random() * 1000000);
     interactiveNoiseSeed = Math.floor(Math.random() * 1000000);
-    generateInstant(getUserParams());
+    generateCreator();
     shuffleAnimating = true;
     shuffleStartTime = millis();
     loop();
   });
-  densitySlider.addEventListener('input', onDensityChange);
-  intensitySlider.addEventListener('input', onIntensityChange);
+  scaleSlider.addEventListener('input', onSliderChange);
+  intensitySlider.addEventListener('input', onSliderChange);
 
   enterShowcaseMode();
 }
@@ -118,7 +116,7 @@ function windowResized() {
   if (mode === 'showcase') {
     generate(activePreset);
   } else {
-    generateInstant(getUserParams());
+    generateCreator();
   }
 }
 
@@ -132,17 +130,32 @@ function draw() {
 
   if (mode === 'creator') {
     let intensity = Number(intensitySlider.value) / 100;
+    let scale = Number(scaleSlider.value) / 100;
     let step = intensity * currentMaxSteps;
-    for (let i = 0; i < planes.length; i++) {
-      planes[i].renderAtStep(step);
-    }
+
     if (shuffleAnimating) {
       let t = constrain((millis() - shuffleStartTime) / SHUFFLE_MS, 0, 1);
+      let easedT = easeOutCubic(t);
+      for (let i = 0; i < planes.length; i++) {
+        let oldP = i < shuffleOldPositions.length ? shuffleOldPositions[i] : planes[i].position;
+        let newP = planes[i].position;
+        let lerpPos = createVector(
+          lerp(oldP.x, newP.x, easedT),
+          lerp(oldP.y, newP.y, easedT),
+          lerp(oldP.z, newP.z, easedT)
+        );
+        planes[i].renderAtStep(step, scale, lerpPos);
+      }
       if (t >= 1) {
         shuffleAnimating = false;
+        noLoop();
       }
+    } else {
+      for (let i = 0; i < planes.length; i++) {
+        planes[i].renderAtStep(step, scale);
+      }
+      noLoop();
     }
-    noLoop();
     return;
   }
 
@@ -151,46 +164,44 @@ function draw() {
 
   if (phase === 'warping') {
     let globalT = constrain(elapsed / currentDuration, 0, 1);
-    renderShowcaseFrame(globalT, false);
+    renderShowcaseFrame(globalT);
     if (globalT >= 1) {
       phase = 'hold_warped';
       phaseStartTime = millis();
     }
   } else if (phase === 'hold_warped') {
-    renderShowcaseFrame(1, false);
+    renderShowcaseFrame(1);
     if (millis() - phaseStartTime >= HOLD_MS) {
-      phase = 'unwarping';
-      animStartTime = millis();
-    }
-  } else if (phase === 'unwarping') {
-    let globalT = constrain(elapsed / currentDuration, 0, 1);
-    renderShowcaseFrame(globalT, true);
-    if (globalT >= 1) {
-      phase = 'hold_flat';
+      // Soft fade — partial overlay, not full blackout
+      phase = 'fading';
+      fadeOverlay.classList.add('soft');
       phaseStartTime = millis();
     }
-  } else if (phase === 'hold_flat') {
-    renderShowcaseFrame(0, false);
-    if (millis() - phaseStartTime >= HOLD_MS) {
+  } else if (phase === 'fading') {
+    renderShowcaseFrame(1);
+    if (millis() - phaseStartTime >= FADE_MS) {
+      // Generate new preset behind the soft overlay
       generate(randomPreset());
+      setTimeout(function () {
+        fadeOverlay.classList.remove('soft');
+      }, 100);
     }
   }
 }
 
-function renderShowcaseFrame(globalProgress, reverse) {
+function renderShowcaseFrame(globalProgress) {
   for (let i = 0; i < planes.length; i++) {
     let pl = planes[i];
     let localT = constrain((globalProgress - pl.delay) / pl.duration, 0, 1);
-    let easedT = reverse ? (1 - easeInCubic(localT)) : easeOutCubic(localT);
+    let easedT = easeOutCubic(localT);
     let step = easedT * pl.maxSteps;
-    pl.renderAtStep(step);
+    pl.renderAtStep(step, 1);
   }
 }
 
 // ── Mode switching ───────────────────────────────────────────────
 function switchMode(target) {
-  let overlay = document.getElementById('fade-overlay');
-  overlay.classList.add('active');
+  fadeOverlay.classList.add('active');
 
   setTimeout(function () {
     if (target === 'creator') {
@@ -199,25 +210,25 @@ function switchMode(target) {
       enterShowcaseMode();
     }
     setTimeout(function () {
-      overlay.classList.remove('active');
+      fadeOverlay.classList.remove('active');
     }, 100);
   }, 500);
 }
 
 function enterShowcaseMode() {
-  clearTimeout(showcaseTimer);
-  cancelAnimationFrame(regenTimer);
   mode = 'showcase';
 
   document.getElementById('creator-ui').classList.add('hidden');
   document.getElementById('showcase-ui').classList.remove('hidden');
 
   generate(randomPreset());
+  // Fade overlay out (covers initial load + mode switch)
+  setTimeout(function () {
+    fadeOverlay.classList.remove('active');
+  }, 200);
 }
 
 function enterCreatorMode() {
-  clearTimeout(showcaseTimer);
-  cancelAnimationFrame(regenTimer);
   mode = 'creator';
 
   document.getElementById('showcase-ui').classList.add('hidden');
@@ -225,28 +236,12 @@ function enterCreatorMode() {
 
   interactiveSeed = Math.floor(Math.random() * 1000000);
   interactiveNoiseSeed = Math.floor(Math.random() * 1000000);
-  generateInstant(getUserParams());
+  generateCreator();
 }
 
 // ── Slider handling ──────────────────────────────────────────────
-function getUserParams() {
-  return {
-    density: Number(densitySlider.value),
-    intensity: Number(intensitySlider.value),
-  };
-}
-
-function onDensityChange() {
-  // Density change requires full regeneration
-  cancelAnimationFrame(regenTimer);
-  regenTimer = requestAnimationFrame(function () {
-    generateInstant(getUserParams());
-  });
-}
-
-function onIntensityChange() {
-  // Intensity just picks a different pre-computed step — instant, no regeneration
-  loop(); // draw one frame
+function onSliderChange() {
+  loop(); // draw one frame — both sliders are render-time only
 }
 
 // ── Generation ───────────────────────────────────────────────────
@@ -262,7 +257,6 @@ function generate(presetKey) {
   let maxDist = 0;
   let positions = [];
 
-  // First pass: generate positions and find max distance
   for (let i = 0; i < p.numPlanes; i++) {
     let pos = createVector(
       random(-width / 2, width / 2),
@@ -274,19 +268,18 @@ function generate(presetKey) {
     if (dist > maxDist) maxDist = dist;
   }
 
-  // Second pass: build planes with stagger delays
   let maxDelay = 0.6;
   for (let i = 0; i < p.numPlanes; i++) {
     let pos = positions[i];
-    let size = random(p.minSize, p.maxSize);
+    let w = random(p.minW, p.maxW);
+    let h = random(p.minH, p.maxH);
     let normal = p5.Vector.random3D();
     let dist = pos.mag();
     let delay = 0.4 * (dist / max(maxDist, 1)) * maxDelay + 0.6 * random(0, maxDelay);
-    let shardDuration = 0.3;
 
-    let dp = new DeformedPlane(pos, size, normal, p.steps, p);
+    let dp = new DeformedPlane(pos, w, h, normal, p.steps, p);
     dp.delay = delay;
-    dp.duration = shardDuration;
+    dp.duration = 0.3;
     planes.push(dp);
   }
 
@@ -294,12 +287,12 @@ function generate(presetKey) {
   loop();
 }
 
-function generateInstant(params) {
+function generateCreator() {
   planes = [];
   currentMaxSteps = CREATOR_MAX_STEPS;
 
   let creatorParams = {
-    gridRes: 10,
+    gridRes: 15,
     steps: CREATOR_MAX_STEPS,
     baseFreq: 0.012,
     freqMult: 0.12,
@@ -309,15 +302,16 @@ function generateInstant(params) {
   randomSeed(interactiveSeed);
   noiseSeed(interactiveNoiseSeed);
 
-  for (let i = 0; i < params.density; i++) {
+  for (let i = 0; i < CREATOR_NUM_PLANES; i++) {
     let pos = createVector(
       random(-width / 2, width / 2),
       random(-height / 2, height / 2),
       random(-width / 2, width / 2)
     );
-    let size = random(80, 220);
+    let w = random(60, 250);
+    let h = random(60, 250);
     let normal = p5.Vector.random3D();
-    let dp = new DeformedPlane(pos, size, normal, CREATOR_MAX_STEPS, creatorParams);
+    let dp = new DeformedPlane(pos, w, h, normal, CREATOR_MAX_STEPS, creatorParams);
     dp.delay = 0;
     dp.duration = 1;
     planes.push(dp);
@@ -334,15 +328,15 @@ function randomPreset() {
 
 // ── DeformedPlane class ──────────────────────────────────────────
 class DeformedPlane {
-  constructor(pos, size, normal, maxSteps, params) {
+  constructor(pos, sizeW, sizeH, normal, maxSteps, params) {
     this.position = pos.copy();
-    this.size = size;
+    this.sizeW = sizeW;
+    this.sizeH = sizeH;
     this.normal = normal.copy().normalize();
     this.maxSteps = maxSteps;
     this.delay = 0;
     this.duration = 1;
 
-    // Pre-compute color once
     this.planeColor = getColorByBands(this.position);
 
     // Pre-compute vertex positions at every step
@@ -356,7 +350,6 @@ class DeformedPlane {
       this.stepVertices.push(this.copyGrid(currentVerts));
     }
 
-    // Smooth each stored step for display
     for (let s = 0; s < this.stepVertices.length; s++) {
       this.smoothGrid(this.stepVertices[s]);
     }
@@ -364,10 +357,11 @@ class DeformedPlane {
 
   generateVertices(gridRes) {
     let vertices = [];
-    let halfSize = this.size / 2;
-    for (let x = -halfSize; x <= halfSize; x += gridRes) {
+    let halfW = this.sizeW / 2;
+    let halfH = this.sizeH / 2;
+    for (let x = -halfW; x <= halfW; x += gridRes) {
       let row = [];
-      for (let y = -halfSize; y <= halfSize; y += gridRes) {
+      for (let y = -halfH; y <= halfH; y += gridRes) {
         row.push(createVector(x, y, 0));
       }
       vertices.push(row);
@@ -411,7 +405,6 @@ class DeformedPlane {
       }
       smoothed.push(row);
     }
-    // Copy back in place
     for (let i = 0; i < vertices.length; i++) {
       for (let j = 0; j < vertices[i].length; j++) {
         vertices[i][j] = smoothed[i][j];
@@ -419,7 +412,7 @@ class DeformedPlane {
     }
   }
 
-  renderAtStep(step) {
+  renderAtStep(step, scale, posOverride) {
     let s0 = Math.floor(step);
     let s1 = Math.ceil(step);
     s0 = Math.min(s0, this.maxSteps);
@@ -430,9 +423,9 @@ class DeformedPlane {
     let grid1 = this.stepVertices[s1];
 
     push();
-    translate(this.position.x, this.position.y, this.position.z);
+    let p = posOverride || this.position;
+    translate(p.x, p.y, p.z);
 
-    // Rotate to match normal
     let up = createVector(0, 0, 1);
     let rotationAxis = up.cross(this.normal);
     let angle = acos(constrain(up.dot(this.normal), -1, 1));
@@ -451,10 +444,10 @@ class DeformedPlane {
         let v3 = this.lerpVert(grid0[i + 1][j + 1], grid1[i + 1][j + 1], frac);
         let v4 = this.lerpVert(grid0[i][j + 1], grid1[i][j + 1], frac);
 
-        vertex(v1.x, v1.y, v1.z);
-        vertex(v2.x, v2.y, v2.z);
-        vertex(v3.x, v3.y, v3.z);
-        vertex(v4.x, v4.y, v4.z);
+        vertex(v1.x * scale, v1.y * scale, v1.z * scale);
+        vertex(v2.x * scale, v2.y * scale, v2.z * scale);
+        vertex(v3.x * scale, v3.y * scale, v3.z * scale);
+        vertex(v4.x * scale, v4.y * scale, v4.z * scale);
       }
       endShape(CLOSE);
     }

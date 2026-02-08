@@ -3,19 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Flow</title>
+    <title>Encased Melting</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.1/p5.js"></script>
     <link rel="stylesheet" type="text/css" href="style.css" />
   </head>
   <body>
-    <!-- Crossfade overlay -->
-    <div id="fade-overlay"></div>
-
-    <!-- Title (always visible) -->
-    <div id="title-block">
-      <h1>Flow</h1>
-      <p class="byline">by Aaron Demby Jones</p>
-    </div>
+    <!-- Crossfade overlay (starts active for soft initial fade-in) -->
+    <div id="fade-overlay" class="active"></div>
 
     <!-- Showcase UI -->
     <div id="showcase-ui">
@@ -26,14 +20,14 @@
     <div id="creator-ui" class="hidden">
       <button id="back-btn">Back</button>
       <div class="slider-group">
-        <label for="density-slider">Density</label>
+        <label for="scale-slider">Fragment Scale</label>
         <input
           type="range"
-          id="density-slider"
-          min="5"
-          max="60"
+          id="scale-slider"
+          min="30"
+          max="300"
           step="1"
-          value="30"
+          value="100"
         />
       </div>
       <div class="slider-group">
