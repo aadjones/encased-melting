@@ -1,0 +1,193 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #0a0a0a;
+  height: 100%;
+}
+
+/* ── Crossfade overlay ────────────────────────────────────────── */
+#fade-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: #0a0a0a;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+
+#fade-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* ── Title block (always visible) ─────────────────────────────── */
+#title-block {
+  position: fixed;
+  top: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  text-align: center;
+  pointer-events: none;
+}
+
+#title-block h1 {
+  font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  font-weight: 200;
+  font-size: clamp(20px, 3vw, 36px);
+  letter-spacing: 0.2em;
+  color: rgba(192, 192, 192, 0.5);
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+
+#title-block .byline {
+  font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12px;
+  color: rgba(102, 102, 102, 0.5);
+  margin: 0;
+}
+
+/* ── Shared UI panel behaviour ────────────────────────────────── */
+#showcase-ui,
+#creator-ui {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  transition: opacity 0.6s ease, visibility 0.6s ease;
+}
+
+#showcase-ui.hidden,
+#creator-ui.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ── Showcase UI ──────────────────────────────────────────────── */
+#showcase-ui {
+  flex-direction: column;
+  gap: 12px;
+}
+
+#make-own-btn {
+  font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 14px 48px;
+  border: 1px solid #555;
+  border-radius: 2px;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+#make-own-btn:hover {
+  border-color: #aaa;
+  color: #ddd;
+}
+
+/* ── Creator UI ───────────────────────────────────────────────── */
+#creator-ui {
+  background: rgba(20, 20, 20, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 16px 28px;
+  gap: 28px;
+}
+
+.slider-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.slider-group label {
+  font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #777;
+}
+
+/* ── Range slider styling ─────────────────────────────────────── */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 140px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+  outline: none;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #888;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.1s ease, background 0.1s ease;
+}
+
+input[type='range']::-webkit-slider-thumb:hover {
+  background: #aaa;
+  transform: scale(1.15);
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #888;
+  border: none;
+  cursor: pointer;
+}
+
+/* ── Back & Shuffle buttons ───────────────────────────────────── */
+#back-btn,
+#shuffle-btn {
+  font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  padding: 8px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  background: transparent;
+  color: #777;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+#back-btn:hover,
+#shuffle-btn:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #bbb;
+}
+
+/* ── Canvas ────────────────────────────────────────────────────── */
+#canvas-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+}
+
+#canvas-container canvas {
+  display: block;
+}

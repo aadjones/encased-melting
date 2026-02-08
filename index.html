@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flow</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.1/p5.js"></script>
+    <link rel="stylesheet" type="text/css" href="style.css" />
+  </head>
+  <body>
+    <!-- Crossfade overlay -->
+    <div id="fade-overlay"></div>
+
+    <!-- Title (always visible) -->
+    <div id="title-block">
+      <h1>Flow</h1>
+      <p class="byline">by Aaron Demby Jones</p>
+    </div>
+
+    <!-- Showcase UI -->
+    <div id="showcase-ui">
+      <button id="make-own-btn">Make Your Own</button>
+    </div>
+
+    <!-- Creator UI -->
+    <div id="creator-ui" class="hidden">
+      <button id="back-btn">Back</button>
+      <div class="slider-group">
+        <label for="density-slider">Density</label>
+        <input
+          type="range"
+          id="density-slider"
+          min="5"
+          max="60"
+          step="1"
+          value="30"
+        />
+      </div>
+      <div class="slider-group">
+        <label for="intensity-slider">Flow Intensity</label>
+        <input
+          type="range"
+          id="intensity-slider"
+          min="0"
+          max="100"
+          step="1"
+          value="100"
+        />
+      </div>
+      <button id="shuffle-btn">Shuffle</button>
+    </div>
+
+    <main>
+      <div id="canvas-container"></div>
+    </main>
+    <script src="sketch.js"></script>
+  </body>
+</html>
