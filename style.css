@@ -76,6 +76,7 @@ html, body {
 #showcase-ui {
   flex-direction: column;
   gap: 12px;
+  z-index: 300;
 }
 
 #make-own-btn {
