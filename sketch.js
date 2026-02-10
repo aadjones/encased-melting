@@ -1,10 +1,12 @@
 // ── Presets ──────────────────────────────────────────────────────
 var PRESETS = {
   drift: {
-    label: 'Drift',
+    label: "Drift",
     numPlanes: 20,
-    minW: 200, maxW: 400,
-    minH: 120, maxH: 280,
+    minW: 200,
+    maxW: 400,
+    minH: 120,
+    maxH: 280,
     gridRes: 12,
     steps: 35,
     baseFreq: 0.005,
@@ -13,10 +15,12 @@ var PRESETS = {
     animDuration: 12,
   },
   torrent: {
-    label: 'Torrent',
+    label: "Torrent",
     numPlanes: 55,
-    minW: 60, maxW: 220,
-    minH: 80, maxH: 200,
+    minW: 60,
+    maxW: 220,
+    minH: 80,
+    maxH: 200,
     gridRes: 12,
     steps: 60,
     baseFreq: 0.015,
@@ -25,10 +29,12 @@ var PRESETS = {
     animDuration: 10,
   },
   filaments: {
-    label: 'Filaments',
+    label: "Filaments",
     numPlanes: 75,
-    minW: 20, maxW: 60,
-    minH: 80, maxH: 200,
+    minW: 20,
+    maxW: 60,
+    minH: 80,
+    maxH: 200,
     gridRes: 8,
     steps: 80,
     baseFreq: 0.025,
@@ -39,23 +45,40 @@ var PRESETS = {
 };
 
 var PRESET_KEYS = Object.keys(PRESETS);
-var HOLD_MS = 2500;
-var FADE_MS = 600;
 var CREATOR_MAX_STEPS = 50;
 var CREATOR_NUM_PLANES = 40;
+
+// ── Timing config (tweak these!) ────────────────────────────────
+var TIMING = {
+  // Warp stagger — how planes spread out their start times
+  maxDelay: 0.35, // max fraction of anim before a plane starts warping (was 0.6)
+  planeDuration: 0.25, // fraction of anim each plane takes to warp (was 0.3)
+
+  // Post-warp hold
+  holdWarped: 300, // ms to hold the fully-warped result (was 2500)
+
+  // Generation crossfade
+  fadeToBlack: 300, // ms for the quick blink to black
+  generateDelay: 10, // ms at full black while new preset generates
+  fadeInReveal: 400, // ms to reveal new generation (was 800)
+  fadeInPause: 50, // ms before reveal starts (lets first frame render)
+
+  // Shuffle (creator mode)
+  shuffleDuration: 3000, // ms for shuffle position animation
+};
 
 // ── State ────────────────────────────────────────────────────────
 let planes = [];
 let animStartTime = 0;
 let currentDuration = 8;
 let currentMaxSteps = 60;
-let activePreset = 'drift';
+let activePreset = "drift";
 
 // Mode: 'showcase' or 'creator'
-let mode = 'showcase';
+let mode = "showcase";
 
-// Showcase state machine: 'warping' → 'hold_warped' → 'fading' → (new preset)
-let phase = 'warping';
+// Showcase state machine: 'warping' → 'hold_warped' → 'fading' (brief blink) → (new preset)
+let phase = "warping";
 let phaseStartTime = 0;
 
 // Creator state
@@ -66,7 +89,6 @@ let interactiveNoiseSeed = null;
 let shuffleAnimating = false;
 let shuffleStartTime = 0;
 let shuffleOldPositions = [];
-var SHUFFLE_MS = 800;
 
 // DOM refs
 let scaleSlider, intensitySlider;
@@ -80,21 +102,23 @@ function easeOutCubic(t) {
 // ── p5 lifecycle ─────────────────────────────────────────────────
 function setup() {
   let canvas = createCanvas(windowWidth, windowHeight, WEBGL);
-  canvas.parent('canvas-container');
+  canvas.parent("canvas-container");
   colorMode(HSB, 360, 100, 100, 255);
   noStroke();
 
-  scaleSlider = document.getElementById('scale-slider');
-  intensitySlider = document.getElementById('intensity-slider');
-  fadeOverlay = document.getElementById('fade-overlay');
+  scaleSlider = document.getElementById("scale-slider");
+  intensitySlider = document.getElementById("intensity-slider");
+  fadeOverlay = document.getElementById("fade-overlay");
 
-  document.getElementById('make-own-btn').addEventListener('click', function () {
-    switchMode('creator');
+  document
+    .getElementById("make-own-btn")
+    .addEventListener("click", function () {
+      switchMode("creator");
+    });
+  document.getElementById("back-btn").addEventListener("click", function () {
+    switchMode("showcase");
   });
-  document.getElementById('back-btn').addEventListener('click', function () {
-    switchMode('showcase');
-  });
-  document.getElementById('shuffle-btn').addEventListener('click', function () {
+  document.getElementById("shuffle-btn").addEventListener("click", function () {
     shuffleOldPositions = planes.map(function (p) {
       return p.position.copy();
     });
@@ -105,15 +129,15 @@ function setup() {
     shuffleStartTime = millis();
     loop();
   });
-  scaleSlider.addEventListener('input', onSliderChange);
-  intensitySlider.addEventListener('input', onSliderChange);
+  scaleSlider.addEventListener("input", onSliderChange);
+  intensitySlider.addEventListener("input", onSliderChange);
 
   enterShowcaseMode();
 }
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
-  if (mode === 'showcase') {
+  if (mode === "showcase") {
     generate(activePreset);
   } else {
     generateCreator();
@@ -128,21 +152,28 @@ function draw() {
   rotateX(PI / 4);
   rotateZ(PI / 6);
 
-  if (mode === 'creator') {
+  if (mode === "creator") {
     let intensity = Number(intensitySlider.value) / 100;
     let scale = Number(scaleSlider.value) / 100;
     let step = intensity * currentMaxSteps;
 
     if (shuffleAnimating) {
-      let t = constrain((millis() - shuffleStartTime) / SHUFFLE_MS, 0, 1);
+      let t = constrain(
+        (millis() - shuffleStartTime) / TIMING.shuffleDuration,
+        0,
+        1,
+      );
       let easedT = easeOutCubic(t);
       for (let i = 0; i < planes.length; i++) {
-        let oldP = i < shuffleOldPositions.length ? shuffleOldPositions[i] : planes[i].position;
+        let oldP =
+          i < shuffleOldPositions.length
+            ? shuffleOldPositions[i]
+            : planes[i].position;
         let newP = planes[i].position;
         let lerpPos = createVector(
           lerp(oldP.x, newP.x, easedT),
           lerp(oldP.y, newP.y, easedT),
-          lerp(oldP.z, newP.z, easedT)
+          lerp(oldP.z, newP.z, easedT),
         );
         planes[i].renderAtStep(step, scale, lerpPos);
       }
@@ -162,30 +193,47 @@ function draw() {
   // ── Showcase state machine ──
   let elapsed = (millis() - animStartTime) / 1000;
 
-  if (phase === 'warping') {
+  if (phase === "warping") {
+    let warpEnd = TIMING.maxDelay + TIMING.planeDuration;
     let globalT = constrain(elapsed / currentDuration, 0, 1);
     renderShowcaseFrame(globalT);
-    if (globalT >= 1) {
-      phase = 'hold_warped';
+    if (globalT >= warpEnd) {
+      phase = "hold_warped";
       phaseStartTime = millis();
     }
-  } else if (phase === 'hold_warped') {
+  } else if (phase === "hold_warped") {
     renderShowcaseFrame(1);
-    if (millis() - phaseStartTime >= HOLD_MS) {
-      // Soft fade — partial overlay, not full blackout
-      phase = 'fading';
-      fadeOverlay.classList.add('soft');
-      phaseStartTime = millis();
-    }
-  } else if (phase === 'fading') {
-    renderShowcaseFrame(1);
-    if (millis() - phaseStartTime >= FADE_MS) {
-      // Generate new preset behind the soft overlay
-      generate(randomPreset());
+    if (millis() - phaseStartTime >= TIMING.holdWarped) {
+      phase = "fading";
+
+      // Quick blink to black, then reveal new generation
+      fadeOverlay.style.transition =
+        "opacity " + TIMING.fadeToBlack / 1000 + "s ease";
+      fadeOverlay.style.opacity = "1";
+      fadeOverlay.style.visibility = "visible";
+
       setTimeout(function () {
-        fadeOverlay.classList.remove('soft');
-      }, 100);
+        // Generate new preset behind the black overlay
+        generate(randomPreset());
+
+        // Brief pause for first frame, then smooth reveal
+        setTimeout(function () {
+          fadeOverlay.style.transition =
+            "opacity " + TIMING.fadeInReveal / 1000 + "s ease";
+          fadeOverlay.style.opacity = "0";
+
+          setTimeout(function () {
+            fadeOverlay.style.visibility = "hidden";
+            fadeOverlay.style.transition = "";
+            fadeOverlay.style.opacity = "";
+            fadeOverlay.style.visibility = "";
+          }, TIMING.fadeInReveal + 50);
+        }, TIMING.fadeInPause);
+      }, TIMING.generateDelay);
     }
+  } else if (phase === "fading") {
+    // Keep rendering current frame during brief fade-to-black
+    renderShowcaseFrame(1);
   }
 }
 
@@ -193,46 +241,45 @@ function renderShowcaseFrame(globalProgress) {
   for (let i = 0; i < planes.length; i++) {
     let pl = planes[i];
     let localT = constrain((globalProgress - pl.delay) / pl.duration, 0, 1);
-    let easedT = easeOutCubic(localT);
-    let step = easedT * pl.maxSteps;
+    let step = localT * pl.maxSteps;
     pl.renderAtStep(step, 1);
   }
 }
 
 // ── Mode switching ───────────────────────────────────────────────
 function switchMode(target) {
-  fadeOverlay.classList.add('active');
+  fadeOverlay.classList.add("active");
 
   setTimeout(function () {
-    if (target === 'creator') {
+    if (target === "creator") {
       enterCreatorMode();
     } else {
       enterShowcaseMode();
     }
     setTimeout(function () {
-      fadeOverlay.classList.remove('active');
+      fadeOverlay.classList.remove("active");
     }, 100);
   }, 500);
 }
 
 function enterShowcaseMode() {
-  mode = 'showcase';
+  mode = "showcase";
 
-  document.getElementById('creator-ui').classList.add('hidden');
-  document.getElementById('showcase-ui').classList.remove('hidden');
+  document.getElementById("creator-ui").classList.add("hidden");
+  document.getElementById("showcase-ui").classList.remove("hidden");
 
   generate(randomPreset());
   // Fade overlay out (covers initial load + mode switch)
   setTimeout(function () {
-    fadeOverlay.classList.remove('active');
+    fadeOverlay.classList.remove("active");
   }, 200);
 }
 
 function enterCreatorMode() {
-  mode = 'creator';
+  mode = "creator";
 
-  document.getElementById('showcase-ui').classList.add('hidden');
-  document.getElementById('creator-ui').classList.remove('hidden');
+  document.getElementById("showcase-ui").classList.add("hidden");
+  document.getElementById("creator-ui").classList.remove("hidden");
 
   interactiveSeed = Math.floor(Math.random() * 1000000);
   interactiveNoiseSeed = Math.floor(Math.random() * 1000000);
@@ -248,7 +295,7 @@ function onSliderChange() {
 function generate(presetKey) {
   activePreset = presetKey;
   planes = [];
-  phase = 'warping';
+  phase = "warping";
 
   let p = PRESETS[presetKey];
   currentDuration = p.animDuration;
@@ -261,25 +308,26 @@ function generate(presetKey) {
     let pos = createVector(
       random(-width / 2, width / 2),
       random(-height / 2, height / 2),
-      random(-width / 2, width / 2)
+      random(-width / 2, width / 2),
     );
     positions.push(pos);
     let dist = pos.mag();
     if (dist > maxDist) maxDist = dist;
   }
 
-  let maxDelay = 0.6;
   for (let i = 0; i < p.numPlanes; i++) {
     let pos = positions[i];
     let w = random(p.minW, p.maxW);
     let h = random(p.minH, p.maxH);
     let normal = p5.Vector.random3D();
     let dist = pos.mag();
-    let delay = 0.4 * (dist / max(maxDist, 1)) * maxDelay + 0.6 * random(0, maxDelay);
+    let delay =
+      0.4 * (dist / max(maxDist, 1)) * TIMING.maxDelay +
+      0.6 * random(0, TIMING.maxDelay);
 
     let dp = new DeformedPlane(pos, w, h, normal, p.steps, p);
     dp.delay = delay;
-    dp.duration = 0.3;
+    dp.duration = TIMING.planeDuration;
     planes.push(dp);
   }
 
@@ -306,12 +354,19 @@ function generateCreator() {
     let pos = createVector(
       random(-width / 2, width / 2),
       random(-height / 2, height / 2),
-      random(-width / 2, width / 2)
+      random(-width / 2, width / 2),
     );
     let w = random(60, 250);
     let h = random(60, 250);
     let normal = p5.Vector.random3D();
-    let dp = new DeformedPlane(pos, w, h, normal, CREATOR_MAX_STEPS, creatorParams);
+    let dp = new DeformedPlane(
+      pos,
+      w,
+      h,
+      normal,
+      CREATOR_MAX_STEPS,
+      creatorParams,
+    );
     dp.delay = 0;
     dp.duration = 1;
     planes.push(dp);
@@ -377,7 +432,7 @@ class DeformedPlane {
           v.x + this.position.x,
           v.y + this.position.y,
           this.position.z,
-          params
+          params,
         );
         v.add(flow.mult(0.5));
       }
@@ -386,7 +441,9 @@ class DeformedPlane {
 
   copyGrid(vertices) {
     return vertices.map(function (row) {
-      return row.map(function (v) { return v.copy(); });
+      return row.map(function (v) {
+        return v.copy();
+      });
     });
   }
 
@@ -397,10 +454,22 @@ class DeformedPlane {
       for (let j = 0; j < vertices[i].length; j++) {
         let sum = vertices[i][j].copy();
         let count = 1;
-        if (i > 0) { sum.add(vertices[i - 1][j]); count++; }
-        if (i < vertices.length - 1) { sum.add(vertices[i + 1][j]); count++; }
-        if (j > 0) { sum.add(vertices[i][j - 1]); count++; }
-        if (j < vertices[i].length - 1) { sum.add(vertices[i][j + 1]); count++; }
+        if (i > 0) {
+          sum.add(vertices[i - 1][j]);
+          count++;
+        }
+        if (i < vertices.length - 1) {
+          sum.add(vertices[i + 1][j]);
+          count++;
+        }
+        if (j > 0) {
+          sum.add(vertices[i][j - 1]);
+          count++;
+        }
+        if (j < vertices[i].length - 1) {
+          sum.add(vertices[i][j + 1]);
+          count++;
+        }
         row.push(sum.div(count));
       }
       smoothed.push(row);
@@ -460,7 +529,7 @@ class DeformedPlane {
     return createVector(
       a.x + (b.x - a.x) * t,
       a.y + (b.y - a.y) * t,
-      a.z + (b.z - a.z) * t
+      a.z + (b.z - a.z) * t,
     );
   }
 }
@@ -500,8 +569,8 @@ function getColorByBands(position) {
 
 // ── Keyboard controls ────────────────────────────────────────────
 function keyPressed() {
-  if (key === 's' || key === 'S') {
-    let stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    saveCanvas('flow-' + stamp, 'png');
+  if (key === "s" || key === "S") {
+    let stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    saveCanvas("flow-" + stamp, "png");
   }
 }
